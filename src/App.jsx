@@ -249,6 +249,11 @@ function ScrollCanvas({ totalFrames = 240 }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
+
+    // 🔥 HD SMOOTHING ENABLED HERE 🔥
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
     const img = framesRef.current[index];
     if (!img) return;
 
