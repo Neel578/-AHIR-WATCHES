@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import "./App.css";
 
 /* ==========================================================================
@@ -307,7 +307,7 @@ function ScrollCanvas({ totalFrames = 240 }) {
         });
 
         // Trigger the download
-        img.src = `/frames/ezgif-frame-${num}.jpg`;
+        img.src = `/frames/frame-${num}.jpg`;
         promises.push(promise);
 
         // Draw the very first frame immediately so the screen isn't blank
@@ -456,14 +456,12 @@ function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) 
   const [activeImg, setActiveImg] = useState(0);
   const [imgError, setImgError] = useState({});
 
-  const related = allWatches
-    .filter((w) => w.id !== watch.id)
-    .sort(() => 0.5 - Math.random())
-    .slice(0, 3);
-
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [watch.id]);
+  const related = useMemo(() => {
+    return allWatches
+      .filter((w) => w.id !== watch.id)
+      .sort(() => 0.5 - Math.random())
+      .slice(0, 3);
+  }, [allWatches, watch.id]);
 
   const handleWhatsApp = () => {
     const msg = `Hello Ahir Watches, I want to order the ${watch.name} priced at ₹${watch.price.toLocaleString("en-IN")}. Please confirm availability.`;
