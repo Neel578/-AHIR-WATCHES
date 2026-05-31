@@ -3,7 +3,6 @@ import "./App.css";
 
 /* ==========================================================================
    ⌚ 1. WATCH DATA (PRODUCTS)
-   Edit prices, names, descriptions, or image paths here.
    ========================================================================== */
 const watches = [
   {
@@ -235,8 +234,64 @@ const watches = [
 
 
 /* ==========================================================================
+   ✨ PARTICLE FIELD (background ambience)
+   ========================================================================== */
+function ParticleField() {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    let animId;
+    let W, H;
+
+    const particles = Array.from({ length: 60 }, () => ({
+      x: Math.random(),
+      y: Math.random(),
+      r: Math.random() * 1.2 + 0.3,
+      vx: (Math.random() - 0.5) * 0.0003,
+      vy: (Math.random() - 0.5) * 0.0003,
+      alpha: Math.random() * 0.5 + 0.1,
+    }));
+
+    const resize = () => {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    const draw = () => {
+      ctx.clearRect(0, 0, W, H);
+      particles.forEach((p) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = 1;
+        if (p.x > 1) p.x = 0;
+        if (p.y < 0) p.y = 1;
+        if (p.y > 1) p.y = 0;
+        ctx.beginPath();
+        ctx.arc(p.x * W, p.y * H, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(201,168,76,${p.alpha})`;
+        ctx.fill();
+      });
+      animId = requestAnimationFrame(draw);
+    };
+    draw();
+
+    return () => {
+      window.removeEventListener("resize", resize);
+      cancelAnimationFrame(animId);
+    };
+  }, []);
+
+  return <canvas ref={canvasRef} className="particle-canvas" />;
+}
+
+
+/* ==========================================================================
    🎥 2. SCROLL CANVAS (HERO ANIMATION)
-   This controls the Apple-style background video scrubbing.
    ========================================================================== */
 function ScrollCanvas({ totalFrames = 240 }) {
   const canvasRef = useRef(null);
@@ -249,87 +304,51 @@ function ScrollCanvas({ totalFrames = 240 }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-
-    // 🔥 HD SMOOTHING ENABLED HERE 🔥
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-
+    ctx.imageSmoothingQuality = "high";
     const img = framesRef.current[index];
     if (!img) return;
-
-    // High-res screen setup
     canvas.width = window.innerWidth * window.devicePixelRatio;
     canvas.height = window.innerHeight * window.devicePixelRatio;
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    
     const w = window.innerWidth;
     const h = window.innerHeight;
-    
-    // 🔥 THE FIX: Mobile vs Desktop Scaling Logic 🔥
     let scale;
     if (w > h) {
-      // Desktop: Scale to fit the height (centers the watch elegantly)
       scale = h / img.height;
     } else {
-      // Mobile/Tablet Portrait: Scale to cover the whole screen
       scale = Math.max(w / img.width, h / img.height);
     }
-    
     const x = (w - img.width * scale) / 2;
     const y = (h - img.height * scale) / 2;
-    
     ctx.clearRect(0, 0, w, h);
     ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-
     const loadFrames = async () => {
-      // Fire all 240 image requests at the exact same time
       const promises = [];
       const loadedArray = new Array(totalFrames);
-
       for (let i = 1; i <= totalFrames; i++) {
         const img = new Image();
         const num = String(i).padStart(3, "0");
         const index = i - 1;
-
         const promise = new Promise((res) => {
-          img.onload = () => {
-            loadedArray[index] = img;
-            res();
-          };
-          img.onerror = () => {
-            loadedArray[index] = img; // Prevent freezing if 1 frame fails
-            res();
-          };
+          img.onload = () => { loadedArray[index] = img; res(); };
+          img.onerror = () => { loadedArray[index] = img; res(); };
         });
-
-        // Trigger the download
         img.src = `/frames/frame-${num}.jpg`;
         promises.push(promise);
-
-        // Draw the very first frame immediately so the screen isn't blank
         if (i === 1) {
           promise.then(() => {
-            if (!cancelled) {
-              framesRef.current = loadedArray;
-              loadedRef.current = true;
-              drawFrame(0);
-            }
+            if (!cancelled) { framesRef.current = loadedArray; loadedRef.current = true; drawFrame(0); }
           });
         }
       }
-
-      // Wait for the background downloads to finish concurrently
       await Promise.all(promises);
-      if (!cancelled) {
-        framesRef.current = loadedArray;
-        loadedRef.current = true;
-      }
+      if (!cancelled) { framesRef.current = loadedArray; loadedRef.current = true; }
     };
-
     loadFrames();
 
     const onScroll = () => {
@@ -341,18 +360,13 @@ function ScrollCanvas({ totalFrames = 240 }) {
         const tunnelScrollable = tunnel.offsetHeight - window.innerHeight;
         const scrolled = Math.max(0, -rect.top);
         const fraction = Math.min(scrolled / tunnelScrollable, 1);
-        const frameIndex = Math.min(
-          Math.floor(fraction * (framesRef.current.length - 1)),
-          framesRef.current.length - 1
-        );
+        const frameIndex = Math.min(Math.floor(fraction * (framesRef.current.length - 1)), framesRef.current.length - 1);
         drawFrame(Math.max(0, frameIndex));
       });
     };
 
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", () => {
-      drawFrame(0); // Redraw on window resize
-    });
+    window.addEventListener("resize", () => { drawFrame(0); });
     return () => {
       cancelled = true;
       window.removeEventListener("scroll", onScroll);
@@ -366,22 +380,35 @@ function ScrollCanvas({ totalFrames = 240 }) {
     <div ref={tunnelRef} className="scroll-tunnel" style={{ height: tunnelHeight }}>
       <div className="scroll-canvas-sticky">
         <div className="hero-overlay-content">
-          <p className="hero-eyebrow">Est. In Excellence</p>
+          <p className="hero-eyebrow">
+            <span className="eyebrow-line" />
+            Est. In Excellence
+            <span className="eyebrow-line" />
+          </p>
           <h1 className="hero-title">
-            Time Is The<br />
-            <span className="gold-text">Ultimate Luxury</span>
+            <span className="hero-word" style={{ animationDelay: "0.1s" }}>Time Is The</span>
+            <br />
+            <span className="gold-text hero-word" style={{ animationDelay: "0.3s" }}>Ultimate Luxury</span>
           </h1>
           <p className="hero-sub">
             Curated replicas of the world's most coveted timepieces,<br />
             crafted for the discerning collector.
           </p>
-          <a href="#collection" className="btn-hero">Explore Collection</a>
+          <div className="hero-cta-group">
+            <a href="#collection" className="btn-hero">Explore Collection</a>
+            <a href="https://wa.me/916354971686" className="btn-hero-ghost" target="_blank" rel="noreferrer">
+              Consult Us
+            </a>
+          </div>
         </div>
         <canvas ref={canvasRef} className="scroll-canvas" />
         <div className="hero-scroll-hint">
           <span>Scroll to discover</span>
           <div className="scroll-line" />
         </div>
+        {/* Cinematic letterbox bars */}
+        <div className="letterbox-top" />
+        <div className="letterbox-bottom" />
       </div>
     </div>
   );
@@ -389,13 +416,54 @@ function ScrollCanvas({ totalFrames = 240 }) {
 
 
 /* ==========================================================================
-   🛒 3. CART ICON COMPONENT
-   The bag icon in the top right navbar.
+   🔍 SEARCH BAR COMPONENT
+   ========================================================================== */
+function SearchBar({ value, onChange, resultCount, total }) {
+  const inputRef = useRef(null);
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <div className={`search-container ${focused ? "focused" : ""}`}>
+      <div className="search-inner">
+        <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
+        <input
+          ref={inputRef}
+          type="text"
+          className="search-input"
+          placeholder="Search timepieces, brands…"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+        {value && (
+          <button className="search-clear" onClick={() => { onChange(""); inputRef.current?.focus(); }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+      {value && (
+        <div className="search-results-pill">
+          {resultCount} of {total} timepieces
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ==========================================================================
+   🛒 3. CART ICON
    ========================================================================== */
 function CartIcon({ count, onClick }) {
   return (
     <button className="cart-btn" onClick={onClick} aria-label="Open cart">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
         <line x1="3" y1="6" x2="21" y2="6" />
         <path d="M16 10a4 4 0 01-8 0" />
@@ -407,13 +475,39 @@ function CartIcon({ count, onClick }) {
 
 
 /* ==========================================================================
-   🃏 4. WATCH CARD COMPONENT
-   The individual watch squares in the main collection grid.
+   🃏 4. WATCH CARD
    ========================================================================== */
-function WatchCard({ watch, onClick, onAddToCart }) {
+function WatchCard({ watch, onClick, onAddToCart, index }) {
   const [imgError, setImgError] = useState(false);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const cardRef = useRef(null);
+
+  const handleMouseMove = (e) => {
+    const rect = cardRef.current.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = (e.clientX - cx) / (rect.width / 2);
+    const dy = (e.clientY - cy) / (rect.height / 2);
+    setTilt({ x: dy * -6, y: dx * 6 });
+  };
+
+  const handleMouseLeave = () => setTilt({ x: 0, y: 0 });
+
   return (
-    <div className="watch-card" onClick={() => onClick(watch)}>
+    <div
+      ref={cardRef}
+      className="watch-card"
+      onClick={() => onClick(watch)}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{
+        transform: `perspective(900px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
+        animationDelay: `${(index % 6) * 0.08}s`,
+      }}
+    >
+      {/* shimmer border */}
+      <div className="card-shine" style={{ "--rx": `${tilt.x}deg`, "--ry": `${tilt.y}deg` }} />
+
       <div className="card-img-wrap">
         {imgError ? (
           <div className="img-fallback"><span>⌚</span></div>
@@ -429,17 +523,26 @@ function WatchCard({ watch, onClick, onAddToCart }) {
         <div className="card-overlay">
           <span className="view-label">View Details</span>
         </div>
+        <div className="card-brand-badge">{watch.brand}</div>
       </div>
+
       <div className="card-body">
-        <span className="card-brand">{watch.brand}</span>
         <h3 className="card-name">{watch.name}</h3>
         <div className="card-footer">
-          <span className="card-price">₹{watch.price.toLocaleString("en-IN")}</span>
+          <div className="card-price-wrap">
+            <span className="card-price-label">Price</span>
+            <span className="card-price">₹{watch.price.toLocaleString("en-IN")}</span>
+          </div>
           <button
             className="btn-cart-small"
             onClick={(e) => { e.stopPropagation(); onAddToCart(watch); }}
           >
-            Add to Cart
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <path d="M16 10a4 4 0 01-8 0" />
+            </svg>
+            Add
           </button>
         </div>
       </div>
@@ -450,11 +553,11 @@ function WatchCard({ watch, onClick, onAddToCart }) {
 
 /* ==========================================================================
    📖 5. PRODUCT DETAIL PAGE
-   The full screen that opens when you click a watch.
    ========================================================================== */
 function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) {
   const [activeImg, setActiveImg] = useState(0);
   const [imgError, setImgError] = useState({});
+  const [zoomed, setZoomed] = useState(false);
 
   const related = useMemo(() => {
     return allWatches
@@ -471,7 +574,7 @@ function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) 
   return (
     <div className="product-page">
       <button className="back-btn" onClick={onBack}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M19 12H5M5 12l7-7M5 12l7 7" />
         </svg>
         Back to Collection
@@ -479,7 +582,7 @@ function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) 
 
       <div className="pp-hero">
         <div className="pp-gallery">
-          <div className="pp-main-img-wrap">
+          <div className={`pp-main-img-wrap ${zoomed ? "zoomed" : ""}`} onClick={() => setZoomed(!zoomed)}>
             {imgError[activeImg] ? (
               <div className="img-fallback large"><span>⌚</span></div>
             ) : (
@@ -490,13 +593,14 @@ function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) 
                 onError={() => setImgError((p) => ({ ...p, [activeImg]: true }))}
               />
             )}
+            <div className="zoom-hint">{zoomed ? "Click to zoom out" : "Click to zoom"}</div>
           </div>
           <div className="pp-thumbs">
             {watch.images.map((src, i) => (
               <button
                 key={i}
                 className={`thumb-btn ${activeImg === i ? "active" : ""}`}
-                onClick={() => setActiveImg(i)}
+                onClick={() => { setActiveImg(i); setZoomed(false); }}
               >
                 {imgError[i] ? (
                   <span className="thumb-fallback">⌚</span>
@@ -511,7 +615,9 @@ function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) 
         <div className="pp-info">
           <span className="modal-brand">{watch.brand}</span>
           <h1 className="pp-name">{watch.name}</h1>
-          <div className="modal-divider" />
+          <div className="modal-divider">
+            <span className="divider-diamond">◆</span>
+          </div>
 
           <div className="pp-specs">
             <span className="spec-chip">Premium Replica</span>
@@ -522,7 +628,10 @@ function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) 
           <p className="modal-desc">{watch.description}</p>
 
           <div className="pp-price-row">
-            <span className="pp-price">₹{watch.price.toLocaleString("en-IN")}</span>
+            <div>
+              <span className="pp-price-label">Retail Price</span>
+              <span className="pp-price">₹{watch.price.toLocaleString("en-IN")}</span>
+            </div>
             <span className="pp-price-note">Incl. all taxes</span>
           </div>
 
@@ -540,15 +649,15 @@ function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) 
 
           <div className="pp-delivery">
             <div className="delivery-row">
-              <span>📦</span>
+              <span className="delivery-icon">📦</span>
               <span>Ships within 2–4 business days · Kosamba, Gujarat</span>
             </div>
             <div className="delivery-row">
-              <span>🔄</span>
+              <span className="delivery-icon">🔄</span>
               <span>Easy returns within 7 days</span>
             </div>
             <div className="delivery-row">
-              <span>🔒</span>
+              <span className="delivery-icon">🔒</span>
               <span>Secure WhatsApp ordering</span>
             </div>
           </div>
@@ -556,17 +665,22 @@ function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) 
       </div>
 
       <div className="pp-related">
-        <h2 className="related-title">You May Also Like</h2>
+        <div className="related-header">
+          <span className="section-eyebrow">Curated For You</span>
+          <h2 className="related-title">You May Also Like</h2>
+        </div>
         <div className="related-grid-full">
-          {related.map((r) => (
-            <div key={r.id} className="related-card-full" onClick={() => onSelectWatch(r)}>
+          {related.map((r, i) => (
+            <div key={r.id} className="related-card-full" onClick={() => onSelectWatch(r)} style={{ animationDelay: `${i * 0.1}s` }}>
               <div className="rcf-img-wrap">
                 <img src={r.images[0]} alt={r.name} className="rcf-img" onError={(e) => { e.target.style.display = "none"; }} />
                 <div className="card-overlay"><span className="view-label">View Details</span></div>
               </div>
-              <span className="related-brand">{r.brand}</span>
-              <span className="related-name">{r.name}</span>
-              <span className="related-price">₹{r.price.toLocaleString("en-IN")}</span>
+              <div className="rcf-body">
+                <span className="related-brand">{r.brand}</span>
+                <span className="related-name">{r.name}</span>
+                <span className="related-price">₹{r.price.toLocaleString("en-IN")}</span>
+              </div>
             </div>
           ))}
         </div>
@@ -578,7 +692,6 @@ function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) 
 
 /* ==========================================================================
    🛍️ 6. CART DRAWER
-   The side panel that slides out when you click the cart icon.
    ========================================================================== */
 function CartDrawer({ cart, onClose, onRemove }) {
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
@@ -595,11 +708,18 @@ function CartDrawer({ cart, onClose, onRemove }) {
     <div className="cart-backdrop" onClick={onClose}>
       <div className="cart-drawer" onClick={(e) => e.stopPropagation()}>
         <div className="cart-header">
-          <h3>Your Cart</h3>
+          <div>
+            <h3>Your Cart</h3>
+            {cart.length > 0 && <span className="cart-subtitle">{cart.length} item{cart.length !== 1 ? "s" : ""}</span>}
+          </div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         {cart.length === 0 ? (
-          <p className="cart-empty">Your cart is empty.</p>
+          <div className="cart-empty-state">
+            <div className="cart-empty-icon">⌚</div>
+            <p className="cart-empty">Your collection awaits.</p>
+            <p className="cart-empty-sub">Add timepieces to begin your order.</p>
+          </div>
         ) : (
           <>
             <ul className="cart-list">
@@ -607,10 +727,15 @@ function CartDrawer({ cart, onClose, onRemove }) {
                 <li key={item.id} className="cart-item">
                   <img src={item.images[0]} alt={item.name} className="cart-item-img" onError={(e) => { e.target.style.display = "none"; }} />
                   <div className="cart-item-info">
+                    <span className="cart-item-brand">{item.brand}</span>
                     <span className="cart-item-name">{item.name}</span>
                     <span className="cart-item-price">₹{(item.price * item.qty).toLocaleString("en-IN")} × {item.qty}</span>
                   </div>
-                  <button className="cart-remove" onClick={() => onRemove(item.id)}>✕</button>
+                  <button className="cart-remove" onClick={() => onRemove(item.id)} aria-label="Remove">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -633,21 +758,54 @@ function CartDrawer({ cart, onClose, onRemove }) {
 
 
 /* ==========================================================================
-   🍞 7. TOAST NOTIFICATION
-   The small popup that says "Added to cart" at the bottom.
+   🍞 7. TOAST
    ========================================================================== */
 function Toast({ message, onDone }) {
   useEffect(() => {
-    const t = setTimeout(onDone, 2200);
+    const t = setTimeout(onDone, 2400);
     return () => clearTimeout(t);
   }, [onDone]);
-  return <div className="toast">{message}</div>;
+  return (
+    <div className="toast">
+      <span className="toast-check">✔</span>
+      {message}
+    </div>
+  );
+}
+
+
+/* ==========================================================================
+   📊 STATS BAR
+   ========================================================================== */
+function StatsBar() {
+  return (
+    <div className="stats-bar">
+      <div className="stat-item">
+        <span className="stat-num">15</span>
+        <span className="stat-label">Timepieces</span>
+      </div>
+      <div className="stat-divider" />
+      <div className="stat-item">
+        <span className="stat-num">5</span>
+        <span className="stat-label">Iconic Brands</span>
+      </div>
+      <div className="stat-divider" />
+      <div className="stat-item">
+        <span className="stat-num">COD</span>
+        <span className="stat-label">Available</span>
+      </div>
+      <div className="stat-divider" />
+      <div className="stat-item">
+        <span className="stat-num">7-Day</span>
+        <span className="stat-label">Returns</span>
+      </div>
+    </div>
+  );
 }
 
 
 /* ==========================================================================
    🚀 8. MAIN APP
-   The core structure combining Navbar, Hero, and the logic.
    ========================================================================== */
 export default function App() {
   const [page, setPage] = useState(null);
@@ -655,9 +813,30 @@ export default function App() {
   const [cartOpen, setCartOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [filter, setFilter] = useState("All");
+  const [search, setSearch] = useState("");
+  const [scrolled, setScrolled] = useState(false);
 
   const brands = ["All", ...new Set(watches.map((w) => w.brand))];
-  const filtered = filter === "All" ? watches : watches.filter((w) => w.brand === filter);
+
+  const filtered = useMemo(() => {
+    let list = filter === "All" ? watches : watches.filter((w) => w.brand === filter);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (w) =>
+          w.name.toLowerCase().includes(q) ||
+          w.brand.toLowerCase().includes(q) ||
+          w.description.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [filter, search]);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     const handlePop = () => setPage(null);
@@ -686,54 +865,97 @@ export default function App() {
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
   const Navbar = (
-    <nav className="navbar">
+    <nav className={`navbar ${scrolled ? "navbar-scrolled" : ""}`}>
       <div className="nav-logo" onClick={() => { if (page) goBack(); }} style={{ cursor: page ? "pointer" : "default" }}>
         <span className="logo-mark">⌚</span>
         <span className="logo-text">AHIR <em>WATCHES</em></span>
       </div>
-      <div className="nav-tagline">Luxury Timepieces · Kosamba, Gujarat</div>
+      <div className="nav-center">
+        <div className="nav-tagline">Luxury Timepieces · Kosamba, Gujarat</div>
+      </div>
       <CartIcon count={cartCount} onClick={() => setCartOpen(true)} />
     </nav>
   );
 
   return (
     <div className="app">
+      <ParticleField />
       {Navbar}
 
-      {/* ── HOME PAGE VIEW ── */}
       {!page && (
         <>
           <section className="scroll-section">
             <ScrollCanvas totalFrames={240} />
           </section>
 
+          <StatsBar />
+
           <section className="collection" id="collection">
             <div className="section-header">
               <p className="section-eyebrow">Our Collection</p>
-              <h2 className="section-title">15 Exceptional Timepieces</h2>
+              <h2 className="section-title">Exceptional Timepieces</h2>
+              <p className="section-subtitle">Every piece, a masterwork of human ingenuity</p>
             </div>
 
-            <div className="filter-bar">
-              {brands.map((b) => (
-                <button key={b} className={`filter-btn ${filter === b ? "active" : ""}`} onClick={() => setFilter(b)}>
-                  {b}
+            <div className="collection-controls">
+              <div className="filter-bar">
+                {brands.map((b) => (
+                  <button key={b} className={`filter-btn ${filter === b ? "active" : ""}`} onClick={() => setFilter(b)}>
+                    {b}
+                  </button>
+                ))}
+              </div>
+
+              <SearchBar
+                value={search}
+                onChange={setSearch}
+                resultCount={filtered.length}
+                total={watches.length}
+              />
+            </div>
+
+            {filtered.length === 0 ? (
+              <div className="no-results">
+                <div className="no-results-icon">🔍</div>
+                <h3 className="no-results-title">No timepieces found</h3>
+                <p className="no-results-sub">Try a different search or filter</p>
+                <button className="no-results-reset" onClick={() => { setSearch(""); setFilter("All"); }}>
+                  Reset Filters
                 </button>
-              ))}
-            </div>
-
-            <div className="watch-grid">
-              {filtered.map((w) => (
-                <WatchCard key={w.id} watch={w} onClick={openProduct} onAddToCart={addToCart} />
-              ))}
-            </div>
+              </div>
+            ) : (
+              <div className="watch-grid">
+                {filtered.map((w, i) => (
+                  <WatchCard key={w.id} watch={w} onClick={openProduct} onAddToCart={addToCart} index={i} />
+                ))}
+              </div>
+            )}
           </section>
 
+          {/* Marquee strip */}
+          <div className="marquee-strip">
+            <div className="marquee-track">
+              {["Audemars Piguet", "Patek Philippe", "Richard Mille", "Jacob & Co", "Rolex", "Tourbillon", "Grand Complication", "Premium Replica", "Kosamba Gujarat"].concat(
+                ["Audemars Piguet", "Patek Philippe", "Richard Mille", "Jacob & Co", "Rolex", "Tourbillon", "Grand Complication", "Premium Replica", "Kosamba Gujarat"]
+              ).map((word, i) => (
+                <span key={i} className="marquee-item">
+                  {word} <span className="marquee-dot">◆</span>
+                </span>
+              ))}
+            </div>
+          </div>
+
           <footer className="footer">
+            <div className="footer-glow" />
             <div className="footer-inner">
               <div className="footer-brand">
                 <span className="logo-mark lg">⌚</span>
                 <span className="footer-name">AHIR WATCHES</span>
                 <p className="footer-tagline">Where Time Meets Craftsmanship</p>
+                <div className="footer-divider" />
+                <p className="footer-desc">
+                  Premium replica timepieces crafted for the discerning collector. Based in Kosamba, Gujarat — serving connoisseurs across India.
+                </p>
               </div>
               <div className="footer-contacts">
                 <div className="contact-block">
@@ -750,7 +972,8 @@ export default function App() {
                 </div>
               </div>
               <div className="footer-cta">
-                <a href="https://wa.me/916354971686" className="btn-whatsapp" target="_blank" rel="noreferrer">
+                <p className="footer-cta-label">Ready to order?</p>
+                <a href="https://wa.me/916354971686" className="btn-whatsapp footer-wa-btn" target="_blank" rel="noreferrer">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
                   </svg>
@@ -759,13 +982,13 @@ export default function App() {
               </div>
             </div>
             <div className="footer-bottom">
+              <div className="footer-bottom-line" />
               <p>© 2026 Ahir Watches · All rights reserved · Kosamba, Gujarat</p>
             </div>
           </footer>
         </>
       )}
 
-      {/* ── PRODUCT PAGE VIEW ── */}
       {page && (
         <ProductPage
           watch={page}
@@ -776,9 +999,8 @@ export default function App() {
         />
       )}
 
-      {/* ── OVERLAYS ── */}
       {cartOpen && <CartDrawer cart={cart} onClose={() => setCartOpen(false)} onRemove={removeFromCart} />}
-      {toast && <Toast message={`✔ ${toast}`} onDone={() => setToast(null)} />}
+      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </div>
   );
 }
