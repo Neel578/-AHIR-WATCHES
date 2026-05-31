@@ -281,19 +281,48 @@ function ScrollCanvas({ totalFrames = 240 }) {
     let cancelled = false;
 
     const loadFrames = async () => {
-      const loaded = [];
+      // Fire all 240 image requests at the exact same time
+      const promises = [];
+      const loadedArray = new Array(totalFrames);
+
       for (let i = 1; i <= totalFrames; i++) {
         const img = new Image();
         const num = String(i).padStart(3, "0");
+        const index = i - 1;
+
+        const promise = new Promise((res) => {
+          img.onload = () => {
+            loadedArray[index] = img;
+            res();
+          };
+          img.onerror = () => {
+            loadedArray[index] = img; // Prevent freezing if 1 frame fails
+            res();
+          };
+        });
+
+        // Trigger the download
         img.src = `/frames/ezgif-frame-${num}.jpg`;
-        
-        await new Promise((res) => { img.onload = res; img.onerror = res; });
-        if (cancelled) return;
-        loaded.push(img);
-        if (i === 1) { framesRef.current = loaded; loadedRef.current = true; drawFrame(0); }
+        promises.push(promise);
+
+        // Draw the very first frame immediately so the screen isn't blank
+        if (i === 1) {
+          promise.then(() => {
+            if (!cancelled) {
+              framesRef.current = loadedArray;
+              loadedRef.current = true;
+              drawFrame(0);
+            }
+          });
+        }
       }
-      framesRef.current = loaded;
-      loadedRef.current = true;
+
+      // Wait for the background downloads to finish concurrently
+      await Promise.all(promises);
+      if (!cancelled) {
+        framesRef.current = loadedArray;
+        loadedRef.current = true;
+      }
     };
 
     loadFrames();
@@ -317,7 +346,7 @@ function ScrollCanvas({ totalFrames = 240 }) {
 
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", () => {
-        drawFrame(0); // Redraw on window resize
+      drawFrame(0); // Redraw on window resize
     });
     return () => {
       cancelled = true;
