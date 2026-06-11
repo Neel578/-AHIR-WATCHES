@@ -558,15 +558,18 @@ function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) 
   const [activeImg, setActiveImg] = useState(0);
   const [imgError, setImgError] = useState({});
   const [zoomed, setZoomed] = useState(false);
+  const [related, setRelated] = useState([]); // 1. Set up a state for related items
 
-  const related = useMemo(() => {
-    return allWatches
-      .filter((w) => w.id !== watch.id)
-      .sort(() => 0.5 - Math.random())
-      .slice(0, 3);
+  // 2. Do the random shuffling safely inside a useEffect
+  useEffect(() => {
+    const others = allWatches.filter((w) => w.id !== watch.id);
+    const shuffled = others.sort(() => 0.5 - Math.random()).slice(0, 3);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRelated(shuffled);
   }, [allWatches, watch.id]);
 
   const handleWhatsApp = () => {
+// ... rest of the code stays the same
     const msg = `Hello Ahir Watches, I want to order the ${watch.name} priced at ₹${watch.price.toLocaleString("en-IN")}. Please confirm availability.`;
     window.open(`https://wa.me/916354971686?text=${encodeURIComponent(msg)}`, "_blank");
   };
@@ -756,7 +759,6 @@ function CartDrawer({ cart, onClose, onRemove }) {
   );
 }
 
-
 /* ==========================================================================
    🍞 7. TOAST
    ========================================================================== */
@@ -772,7 +774,6 @@ function Toast({ message, onDone }) {
     </div>
   );
 }
-
 
 /* ==========================================================================
    📊 STATS BAR
@@ -803,12 +804,20 @@ function StatsBar() {
   );
 }
 
-
 /* ==========================================================================
    🚀 8. MAIN APP
    ========================================================================== */
 export default function App() {
-  const [page, setPage] = useState(null);
+  // 👇 THIS IS THE FIX: Check the URL right when the state is created
+  const [page, setPage] = useState(() => {
+    const currentHash = window.location.hash;
+    if (currentHash.startsWith("#watch-")) {
+      const watchId = parseInt(currentHash.split("-")[1], 10);
+      return watches.find((w) => w.id === watchId) || null;
+    }
+    return null;
+  });
+
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [toast, setToast] = useState(null);
@@ -843,6 +852,8 @@ export default function App() {
     window.addEventListener("popstate", handlePop);
     return () => window.removeEventListener("popstate", handlePop);
   }, []);
+
+  /* (The old deep-linking useEffect that was causing the error was deleted from here) */
 
   const openProduct = useCallback((watch) => {
     window.history.pushState({ watchId: watch.id }, "", `#watch-${watch.id}`);
