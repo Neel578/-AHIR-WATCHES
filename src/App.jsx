@@ -568,9 +568,10 @@ function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) 
     setRelated(shuffled);
   }, [allWatches, watch.id]);
 
+  /* 👇 UPDATED WHATSAPP LINK FOR SINGLE PRODUCT 👇 */
   const handleWhatsApp = () => {
-// ... rest of the code stays the same
-    const msg = `Hello Ahir Watches, I want to order the ${watch.name} priced at ₹${watch.price.toLocaleString("en-IN")}. Please confirm availability.`;
+    const watchUrl = `${window.location.origin}/#watch-${watch.id}`;
+    const msg = `*${watch.name}*\n₹${watch.price.toLocaleString("en-IN")}\n${watchUrl}`;
     window.open(`https://wa.me/916354971686?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -692,18 +693,20 @@ function ProductPage({ watch, onBack, onAddToCart, allWatches, onSelectWatch }) 
   );
 }
 
-
 /* ==========================================================================
    🛍️ 6. CART DRAWER
    ========================================================================== */
 function CartDrawer({ cart, onClose, onRemove }) {
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
 
+  /* 👇 UPDATED WHATSAPP LINK FOR CART CHECKOUT 👇 */
   const handleWhatsAppAll = () => {
-    const lines = cart.map(
-      (i) => `• ${i.name} × ${i.qty} = ₹${(i.price * i.qty).toLocaleString("en-IN")}`
-    );
-    const msg = `Hello Ahir Watches! I want to place the following order:\n\n${lines.join("\n")}\n\nTotal: ₹${total.toLocaleString("en-IN")}\n\nPlease confirm availability.`;
+    const lines = cart.map((i) => {
+      const itemUrl = `${window.location.origin}/#watch-${i.id}`;
+      return `*${i.name}*\n₹${(i.price * i.qty).toLocaleString("en-IN")} (Qty: ${i.qty})\n${itemUrl}`;
+    });
+    
+    const msg = `Hello Ahir Watches! I'd like to order:\n\n${lines.join("\n\n")}\n\n*Total: ₹${total.toLocaleString("en-IN")}*`;
     window.open(`https://wa.me/916354971686?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -803,7 +806,6 @@ function StatsBar() {
     </div>
   );
 }
-
 /* ==========================================================================
    🚀 8. MAIN APP
    ========================================================================== */
